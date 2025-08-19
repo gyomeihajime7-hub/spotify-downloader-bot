@@ -268,14 +268,8 @@ class SimpleYouTubeDownloader:
                 
         except Exception as e:
             logger.error(f"Track download error: {e}")
-            # Emergency fallback
-            try:
-                if not hasattr(self, 'render_downloader'):
-                    from bot.render_friendly_downloader import RenderFriendlyDownloader
-                    self.render_downloader = RenderFriendlyDownloader()
-                return await self.render_downloader.download_track(track_metadata, quality)
-            except:
-                return None
+            # Return None if all methods fail
+            return None
                 
     def _detect_hosting_platform(self):
         """Detect if running on a hosting platform where YouTube might be blocked"""
