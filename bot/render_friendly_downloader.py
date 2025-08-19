@@ -42,13 +42,13 @@ class RenderFriendlyDownloader:
             if audio_file:
                 return audio_file
             
-            # As last resort, create a demo audio file
-            logger.info("🎶 Creating demo audio as fallback...")
-            return await self._create_demo_audio(track_name, artist_name, quality)
+            # No more sources available
+            logger.error(f"❌ All download sources failed for: {track_name} by {artist_name}")
+            return None
             
         except Exception as e:
             logger.error(f"Error in render-friendly download: {e}")
-            return await self._create_demo_audio(track_name, artist_name, quality)
+            return None
 
     async def _download_from_internet_archive(self, track_name, artist_name, quality):
         """Download from Internet Archive - works well on hosting platforms"""
@@ -155,41 +155,3 @@ class RenderFriendlyDownloader:
         
         return None
 
-    async def _create_demo_audio(self, track_name, artist_name, quality):
-        """Create demo audio file as fallback"""
-        try:
-            logger.info(f"🎶 Creating demo audio for: {track_name} by {artist_name}")
-            
-            # Create a simple demo file with track info
-            safe_filename = clean_filename(f"{artist_name} - {track_name}")
-            if not safe_filename.endswith('.mp3'):
-                safe_filename += '.mp3'
-            
-            demo_file_path = os.path.join(self.temp_dir, safe_filename)
-            
-            # Create a minimal MP3 file with metadata
-            # This creates a very short silent MP3 with the track info
-            demo_content = self._create_minimal_mp3_with_metadata(track_name, artist_name)
-            
-            with open(demo_file_path, 'wb') as f:
-                f.write(demo_content)
-            
-            logger.info(f"✅ Created demo audio: {demo_file_path}")
-            return demo_file_path
-            
-        except Exception as e:
-            logger.error(f"Failed to create demo audio: {e}")
-            return None
-
-    def _create_minimal_mp3_with_metadata(self, track_name, artist_name):
-        """Create a minimal MP3 file with ID3 tags"""
-        # This is a very basic MP3 frame with ID3v2 header
-        # In reality, you'd use a proper audio library like mutagen
-        
-        # Basic MP3 header with ID3v2
-        mp3_header = b'ID3\x03\x00\x00\x00\x00\x00\x00'
-        
-        # Add some minimal MP3 frame data (very short silent audio)
-        mp3_frame = b'\xff\xfb\x90\x00' + b'\x00' * 100
-        
-        return mp3_header + mp3_frame
