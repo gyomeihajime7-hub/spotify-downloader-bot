@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class SimpleYouTubeDownloader:
     def __init__(self):
-        """Simple YouTube downloader using yt-dlp"""
+        """Simple YouTube downloader using yt-dlp with render-friendly fallback"""
         self.temp_dir = tempfile.gettempdir()
         
         # Quality settings for yt-dlp
@@ -18,6 +18,14 @@ class SimpleYouTubeDownloader:
             'medium': 'worstaudio[abr>=128]/worst[ext=mp4]/worst',
             'low': 'worstaudio/worst'
         }
+        
+        # Check if we're on a hosting platform (Render, Heroku, etc.)
+        self.is_hosting_platform = self._detect_hosting_platform()
+        
+        # Initialize render-friendly downloader for hosting platforms
+        if self.is_hosting_platform:
+            from bot.render_friendly_downloader import RenderFriendlyDownloader
+            self.render_downloader = RenderFriendlyDownloader()
 
     async def search_and_download_with_deezer(self, track_name, artist_name, quality='medium'):
         """Use Deezer API for ultra-fast accurate search, then download from YouTube"""
@@ -239,16 +247,56 @@ class SimpleYouTubeDownloader:
             artist_name = artists.split(',')[0].strip()  # Use first artist only
             
             logger.info(f"Starting download: {track_name} by {artist_name}")
-        # This will show as "🎵 Please wait, your music is being processed..." in Telegram
             
+            # If on hosting platform, use render-friendly downloader immediately
+            if self.is_hosting_platform and hasattr(self, 'render_downloader'):
+                logger.info("🌐 Detected hosting platform - using render-friendly downloader")
+                return await self.render_downloader.download_track(track_metadata, quality)
+            
+            # Try YouTube download for local/VPS environments
             audio_file = await self.search_and_download(track_name, artist_name, quality)
             
             if audio_file and os.path.exists(audio_file):
                 return audio_file
             else:
-                logger.error(f"Failed to download: {track_name} by {artist_name}")
-                return None
+                # Final fallback: use render-friendly downloader
+                logger.info("🔄 YouTube failed, trying render-friendly downloader...")
+                if not hasattr(self, 'render_downloader'):
+                    from bot.render_friendly_downloader import RenderFriendlyDownloader
+                    self.render_downloader = RenderFriendlyDownloader()
+                return await self.render_downloader.download_track(track_metadata, quality)
                 
         except Exception as e:
             logger.error(f"Track download error: {e}")
-            return None
+            # Emergency fallback
+            try:
+                if not hasattr(self, 'render_downloader'):
+                    from bot.render_friendly_downloader import RenderFriendlyDownloader
+                    self.render_downloader = RenderFriendlyDownloader()
+                return await self.render_downloader.download_track(track_metadata, quality)
+            except:
+                return None
+                
+    def _detect_hosting_platform(self):
+        """Detect if running on a hosting platform where YouTube might be blocked"""
+        # Check environment variables that indicate hosting platforms
+        hosting_indicators = [
+            'RENDER',  # Render
+            'DYNO',    # Heroku
+            'RAILWAY_ENVIRONMENT',  # Railway
+            'VERCEL',  # Vercel
+            'NETLIFY', # Netlify
+        ]
+        
+        for indicator in hosting_indicators:
+            if os.getenv(indicator):
+                logger.info(f"🌐 Detected hosting platform: {indicator}")
+                return True
+        
+        # Also check for common hosting platform domains
+        hostname = os.getenv('HOSTNAME', '')
+        if any(domain in hostname for domain in ['render.com', 'herokuapp.com', 'railway.app']):
+            logger.info(f"🌐 Detected hosting platform by hostname: {hostname}")
+            return True
+            
+        return False
