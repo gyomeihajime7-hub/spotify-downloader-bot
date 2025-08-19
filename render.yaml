@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: spotify-downloader-bot
+    env: python
+    buildCommand: pip install -r render_requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: PORT
+        value: "10000"
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+    healthCheckPath: /health
